@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Misi Toleransi: Escape Room Sekolah Interaktif</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Fredoka & Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Fredoka', 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            color: #f8fafc;
+            min-height: 100vh;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.75);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        .keypad-btn {
+            transition: all 0.15s ease;
+            box-shadow: 0 4px 0 #1e293b;
+        }
+        .keypad-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #1e293b;
+        }
+        .pulse-glow {
+            animation: pulseGlow 2s infinite;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
+            50% { box-shadow: 0 0 30px rgba(245, 158, 11, 0.8); }
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 4px; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen overflow-x-hidden select-none">
+
+    <!-- Sound Effects Synthesizer using Web Audio API -->
+    <script>
+        const AudioFX = {
+            ctx: null,
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            },
+            playClick() {
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(200, this.ctx.currentTime + 0.05);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.05);
+            },
+            playCorrect() {
+                this.init();
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, index) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + index * 0.08);
+                    gain.gain.setValueAtTime(0.3, this.ctx.currentTime + index * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + index * 0.08 + 0.2);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + index * 0.08);
+                    osc.stop(this.ctx.currentTime + index * 0.08 + 0.2);
+                });
+            },
+            playWrong() {
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(110, this.ctx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.25);
+            },
+            playUnlock() {
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, this.ctx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            }
+        };
+    </script>
+
+    <!-- Top Navigation / Game Bar -->
+    <header class="w-full bg-slate-900/80 border-b border-slate-700 p-4 sticky top-0 z-40 backdrop-blur-md">
+        <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <!-- Game Title & Badge -->
+            <div class="flex items-center gap-3">
+                <div class="bg-amber-500 text-slate-900 p-2.5 rounded-xl font-bold flex items-center justify-center">
+                    <i class="fa-solid fa-key text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold tracking-wide text-amber-400">MISI TOLERANSI</h1>
+                    <p class="text-xs text-slate-400">Escape Room Pendidikan Moral Tahun 3</p>
+                </div>
+            </div>
+
+            <!-- Timer & Level Display -->
+            <div id="game-status-bar" class="hidden flex items-center gap-6">
+                <!-- Progress Bar -->
+                <div class="hidden sm:block w-36 md:w-48">
+                    <div class="flex justify-between text-xs mb-1 font-semibold text-slate-300">
+                        <span>Kemajuan</span>
+                        <span id="progress-text">Bilik 1 / 3</span>
+                    </div>
+                    <div class="w-full bg-slate-700 h-3 rounded-full overflow-hidden border border-slate-600">
+                        <div id="progress-bar-inner" class="bg-gradient-to-r from-amber-500 to-emerald-400 h-full w-1/3 transition-all duration-500"></div>
+                    </div>
+                </div>
+
+                <!-- Timer Display -->
+                <div class="bg-slate-800 border-2 border-amber-500/50 px-4 py-1.5 rounded-xl flex items-center gap-2">
+                    <i class="fa-solid fa-clock text-amber-400 animate-pulse"></i>
+                    <span id="timer-display" class="font-mono text-xl font-bold text-amber-300">10:00</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 flex flex-col justify-center">
+
+        <!-- SCREEN 1: WELCOME / START SCREEN -->
+        <section id="start-screen" class="glass-panel p-6 md:p-10 rounded-3xl text-center max-w-2xl mx-auto shadow-2xl relative overflow-hidden">
+            <div class="absolute -top-10 -right-10 w-40 h-40 bg-amber-500/10 rounded-full blur-2xl"></div>
+            <div class="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-500/10 rounded-full blur-2xl"></div>
+
+            <div class="inline-block p-4 bg-slate-800/80 rounded-full mb-4 border border-amber-500/30 text-amber-400">
+                <i class="fa-solid fa-school-lock text-5xl md:text-6xl"></i>
+            </div>
+            
+            <h2 class="text-2xl md:text-4xl font-extrabold mb-3 text-white">Selamat Datang Penyelamat Sekolah!</h2>
+            <p class="text-slate-300 text-sm md:text-base mb-6 leading-relaxed">
+                Anda dan rakan-rakan telah terkunci di dalam bangunan sekolah! Pintu utama terkunci rapat dengan pad kekunci berkeselamatan tinggi. 
+                Selesaikan **3 Teka-teki Toleransi** untuk mengumpul digit **Kod Laluan Rahsia** dan melarikan diri sebelum masa tamat!
+            </p>
+
+            <!-- Learning Standard Badges -->
+            <div class="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 mb-6 text-left">
+                <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-graduation-cap"></i> Misi Pembelajaran Anda:
+                </h3>
+                <ul class="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                    <li>Mengenal ciri & contoh sikap toleransi di sekolah.</li>
+                    <li>Menghuraikan kepentingan & perasaan bersikap toleransi.</li>
+                    <li>Mengamalkan toleransi demi mengukuhkan perpaduan.</li>
+                </ul>
+            </div>
+
+            <!-- Input Nama Murid -->
+            <div class="mb-6 max-w-md mx-auto text-left">
+                <label for="player-name" class="block text-xs font-bold text-slate-300 mb-2">Nama Murid / Kumpulan:</label>
+                <input type="text" id="player-name" placeholder="Masukkan nama anda..." class="w-full px-4 py-3 bg-slate-900/90 border-2 border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors">
+            </div>
+
+            <button onclick="startGame()" class="w-full max-w-md bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-lg py-4 px-8 rounded-2xl shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-3 mx-auto">
+                <span>MULAKAN MISI ESCAPE</span>
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </section>
+
+        <!-- SCREEN 2: MAIN ESCAPE GAME ROOMS -->
+        <section id="game-screen" class="hidden space-y-6">
+
+            <!-- Room Info & Narrative -->
+            <div class="glass-panel p-4 md:p-6 rounded-2xl border-l-4 border-l-amber-500 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span id="room-badge" class="bg-amber-500/20 text-amber-300 text-xs font-bold px-3 py-1 rounded-full border border-amber-500/30">
+                            BILIK 1 FROM 3
+                        </span>
+                        <h2 id="room-title" class="text-lg md:text-xl font-bold text-white">Bilik 1: Dewan Perhimpunan</h2>
+                    </div>
+                    <p id="room-desc" class="text-xs md:text-sm text-slate-300 mt-1">Selesaikan cabaran soalan untuk mendapatkan Digit Kod Laluan pertama!</p>
+                </div>
+
+                <button onclick="showHint()" class="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all self-end md:self-auto">
+                    <i class="fa-solid fa-lightbulb text-amber-400"></i>
+                    <span>Dapatkan Petunjuk</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                <!-- Puzzle / Question Panel (Left - 7 cols) -->
+                <div class="lg:col-span-7 glass-panel p-5 md:p-7 rounded-2xl space-y-5">
+                    <div class="flex justify-between items-center border-b border-slate-700/60 pb-3">
+                        <h3 class="font-bold text-amber-400 text-base flex items-center gap-2">
+                            <i class="fa-solid fa-puzzle-piece"></i> Cabaran Misi Toleransi
+                        </h3>
+                        <span id="question-tracker" class="text-xs bg-slate-800 px-3 py-1 rounded-full text-slate-400 border border-slate-700">Soalan 1 / 3</span>
+                    </div>
+
+                    <!-- Question Content Area -->
+                    <div id="puzzle-container" class="space-y-4">
+                        <!-- Dynamic Question Loaded Here -->
+                    </div>
+
+                    <!-- Feedback Alert Message -->
+                    <div id="feedback-box" class="hidden p-3.5 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-3 transition-all">
+                        <i id="feedback-icon" class="text-base"></i>
+                        <span id="feedback-text"></span>
+                    </div>
+                </div>
+
+                <!-- Digital Keypad Panel (Right - 5 cols) -->
+                <div class="lg:col-span-5 glass-panel p-5 rounded-2xl flex flex-col items-center justify-center space-y-4 border border-slate-700">
+                    <div class="text-center">
+                        <h3 class="font-bold text-slate-200 text-sm flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-lock text-amber-400"></i> Pad Kekunci Pintu Rahsia
+                        </h3>
+                        <p class="text-[11px] text-slate-400">Kumpulkan semua digit selepas menjawab soalan betul!</p>
+                    </div>
+
+                    <!-- Code Display Screen -->
+                    <div class="bg-slate-950 p-4 rounded-xl border-2 border-slate-700 w-full max-w-[240px] text-center shadow-inner">
+                        <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-1">Kod Dimasukkan</div>
+                        <div id="keypad-display" class="font-mono text-3xl font-extrabold tracking-widest text-emerald-400 h-9 flex items-center justify-center">
+                            ----
+                        </div>
+                    </div>
+
+                    <!-- Keypad Buttons Matrix -->
+                    <div class="grid grid-cols-3 gap-2.5 w-full max-w-[240px]">
+                        <button onclick="pressKey('1')" class="keypad-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-lg border border-slate-700">1</button>
+                        <button onclick="pressKey('2')" class="keypad-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-lg border border-slate-700">2</button>
+                        <button onclick="pressKey('3')" class="keypad-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-lg border border-slate-700">3</button>
+                        <button onclick="pressKey('4')" class="keypad-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-lg border border-slate-700">4</button>
+                        <button onclick="pressKey('5')" class="keypad-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-lg border border-slate-700">5</button>
+                        <button onclick="pressKey('6')" class="keypad-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-lg border border-slate-700">6</button>
+                        <button onclick="pressKey('7')" class="keypad-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-lg border border-slate-700">7</button>
+                        <button onclick="pressKey('8')" class="keypad-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-lg border border-slate-700">8</button>
+                        <button onclick="pressKey('9')" class="keypad-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-lg border border-slate-700">9</button>
+                        
+                        <button onclick="clearKeypad()" class="keypad-btn bg-rose-900/60 hover:bg-rose-800 text-rose-200 font-bold py-3 rounded-xl text-xs border border-rose-700/50">PADAM</button>
+                        <button onclick="pressKey('0')" class="keypad-btn bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-lg border border-slate-700">0</button>
+                        <button onclick="submitCode()" class="keypad-btn bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-extrabold py-3 rounded-xl text-xs border border-emerald-400">BUKA</button>
+                    </div>
+
+                    <!-- Clue Memo Display -->
+                    <div class="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl text-center w-full max-w-[240px]">
+                        <span class="text-[11px] font-bold text-amber-300 block mb-0.5">Petunjuk Kod Bilik Ini:</span>
+                        <span id="collected-digit-hint" class="text-xs text-slate-300 italic">Selesaikan soalan untuk melihat digit!</span>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- SCREEN 3: SUCCESS ESCAPE SCREEN -->
+        <section id="victory-screen" class="hidden glass-panel p-6 md:p-10 rounded-3xl text-center max-w-2xl mx-auto shadow-2xl relative">
+            <div class="inline-block p-4 bg-emerald-500/20 border-2 border-emerald-400 rounded-full mb-4 text-emerald-400 pulse-glow">
+                <i class="fa-solid fa-trophy text-6xl"></i>
+            </div>
+
+            <h2 class="text-3xl md:text-5xl font-black text-amber-400 mb-2 tracking-tight">YOU ESCAPED!</h2>
+            <p class="text-lg font-bold text-slate-200 mb-6">TAHNIAH, ANDA TELAH BERJAYA KELUAR!</p>
+
+            <div class="bg-slate-900/90 border border-slate-700 p-6 rounded-2xl mb-6 text-left space-y-3">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-xs text-slate-400">Nama Penyelamat:</span>
+                    <span id="summary-name" class="font-bold text-amber-300 text-sm">Ahmad</span>
+                </div>
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-xs text-slate-400">Baki Masa Terus Selamat:</span>
+                    <span id="summary-time" class="font-mono font-bold text-emerald-400 text-sm">05:24</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-slate-400">Status Amalan Toleransi:</span>
+                    <span class="bg-emerald-500/20 text-emerald-300 text-xs px-2.5 py-1 rounded-full font-bold">LULUS CEMERLANG</span>
+                </div>
+            </div>
+
+            <p class="text-xs md:text-sm text-slate-300 mb-6 italic leading-relaxed">
+                "Toleransi ialah sikap bertolak ansur, sabar, dan mengawal diri demi menghormati orang lain. Ingatlah untuk sentiasa mengamalkannya dengan warga sekolah!"
+            </p>
+
+            <button onclick="restartGame()" class="w-full max-w-md bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-base py-3.5 px-6 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 mx-auto">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>Main Semula</span>
+            </button>
+        </section>
+
+        <!-- SCREEN 4: GAME OVER SCREEN (TIME OUT) -->
+        <section id="gameover-screen" class="hidden glass-panel p-6 md:p-10 rounded-3xl text-center max-w-2xl mx-auto shadow-2xl">
+            <div class="inline-block p-4 bg-rose-500/20 border-2 border-rose-500 rounded-full mb-4 text-rose-400">
+                <i class="fa-solid fa-hourglass-end text-6xl"></i>
+            </div>
+
+            <h2 class="text-3xl md:text-4xl font-extrabold text-rose-400 mb-2">MASA TELAH TAMAT!</h2>
+            <p class="text-slate-300 text-sm mb-6">Anda gagal melarikan diri tepat pada waktunya. Jangan putus asa, sila cuba lagi untuk menguasai topik Toleransi!</p>
+
+            <button onclick="restartGame()" class="w-full max-w-md bg-rose-600 hover:bg-rose-500 text-white font-bold text-base py-3.5 px-6 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 mx-auto">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>Cuba Lagi</span>
+            </button>
+        </section>
+
+    </main>
+
+    <!-- Modal Petunjuk (Hint Modal) -->
+    <div id="hint-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="glass-panel p-6 rounded-2xl max-w-md w-full border border-amber-500/40 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center text-amber-400 border-b border-slate-700 pb-3">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-lightbulb"></i> Petunjuk Bilik
+                </h3>
+                <button onclick="closeHint()" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p id="hint-text-content" class="text-sm text-slate-200 leading-relaxed">
+                Petunjuk akan dipaparkan di sini.
+            </p>
+            <button onclick="closeHint()" class="w-full bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold py-2.5 rounded-xl text-xs border border-slate-600">
+                Faham, Terima Kasih!
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Game Questions Database categorized by Learning Standards
+        const escapeRooms = [
+            {
+                id: 1,
+                title: "Bilik 1: Dewan Perhimpunan",
+                badge: "BILIK 1 DARI 3",
+                desc: "Selesaikan 3 soalan berkenaan Ciri & Contoh Toleransi di sekolah untuk mendapatkan Kod Bilik 1!",
+                requiredPasscode: "482", // Correct keypad passcode for Room 1
+                hint: "Kod Laluan Bilik 1 mengandungi 3 digit yang anda kumpulkan selepas menjawab setiap soalan dengan betul! Semak memo di bawah pad kekunci.",
+                questions: [
+                    {
+                        // Standard Pembelajaran 1: Menyenaraikan ciri toleransi
+                        type: "mcq",
+                        question: "Apakah ciri utama bagi seseorang murid yang bersikap toleransi di sekolah?",
+                        options: [
+                            "A. Cepat marah apabila ditegur rakan",
+                            "B. Bersikap sabar dan bertolak ansur",
+                            "C. Mementingkan diri sendiri sahaja",
+                            "D. Sentiasa mahu menang dalam permainan"
+                        ],
+                        correct: 1, // Index 1 = B
+                        digitAward: "4",
+                        explanation: "Syabas! Bersikap sabar dan bertolak ansur ialah ciri utama toleransi. Digit Pertama ialah: 4"
+                    },
+                    {
+                        // Standard Pembelajaran 2: Menjelaskan contoh sikap toleransi sesama warga sekolah
+                        type: "mcq",
+                        question: "Antara berikut, yang manakah CONTOH sikap toleransi di kantin sekolah?",
+                        options: [
+                            "A. Memotong barisan untuk membeli makanan dengan cepat",
+                            "B. Memberi laluan kepada murid yang lebih kecil beratur di hadapan",
+                            "C. Mengambil kerusi rakan tanpa meminta izin",
+                            "D. Berekor-ekor menolak rakan di kaunter makanan"
+                        ],
+                        correct: 1, // Index 1 = B
+                        digitAward: "8",
+                        explanation: "Tepat sekali! Memberi laluan dan beratur dengan sabar adalah contoh sikap toleransi. Digit Kedua ialah: 8"
+                    },
+                    {
+                        // Standard Pembelajaran 2: Menjelaskan contoh sikap toleransi sesama warga sekolah
+                        type: "mcq",
+                        question: "Rakan kelas anda secara tidak sengaja menjatuhkan kotak pensel anda. Apakah tindakan bertoleransi yang patut anda lakukan?",
+                        options: [
+                            "A. Dimarahi dan menjerit kepada rakan tersebut",
+                            "B. Memaafkan rakan dan bersama-sama mengutip pensel",
+                            "C. Menjatuhkan semula kotak pensel rakan sebagai balas dendam",
+                            "D. Melaporkan kepada guru supaya rakan dihukum berat"
+                        ],
+                        correct: 1, // Index 1 = B
+                        digitAward: "2",
+                        explanation: "Hebat! Memaafkan dan bertolak ansur menguatkan persahabatan. Digit Ketiga ialah: 2"
+                    }
+                ]
+            },
+            {
+                id: 2,
+                title: "Bilik 2: Pusat Sumber Sekolah",
+                badge: "BILIK 2 DARI 3",
+                desc: "Selesaikan soalan Kepentingan & Perasaan Toleransi untuk mendapatkan Kod Pintu Bilik 2!",
+                requiredPasscode: "739", // Correct keypad passcode for Room 2
+                hint: "Gabungkan 3 digit yang diperoleh daripada jawapan betul anda secara berurutan.",
+                questions: [
+                    {
+                        // Standard Pembelajaran 3: Menghuraikan kepentingan toleransi dengan warga sekolah
+                        type: "mcq",
+                        question: "Apakah KEPENTINGAN mengamalkan sikap toleransi semasa berada di perpustakaan sekolah?",
+                        options: [
+                            "A. Suasana perpustakaan menjadi bising dan meriah",
+                            "B. Mewujudkan suasana yang tenang dan selesa untuk semua pembaca",
+                            "C. Membolehkan kita berebut buku cerita kegemaran",
+                            "D. Memastikan kita dipuji oleh guru pengawas"
+                        ],
+                        correct: 1, // Index 1 = B
+                        digitAward: "7",
+                        explanation: "Sangat baik! Toleransi di perpustakaan menjaga ketenteraman awam. Digit Pertama ialah: 7"
+                    },
+                    {
+                        // Standard Pembelajaran 4: Mengekspresikan perasaan apabila bersikap toleransi
+                        type: "mcq",
+                        question: "Apakah PERASAAN anda apabila berjaya bertolak ansur dan berkongsi peralatan sukan bersama rakan?",
+                        options: [
+                            "A. Rasa gembira, tenang, dan bersyukur",
+                            "B. Rasa sedih dan kecewa",
+                            "C. Rasa cemburu dan dengki",
+                            "D. Rasa bosan dan jemu"
+                        ],
+                        correct: 0, // Index 0 = A
+                        digitAward: "3",
+                        explanation: "Tepat! Sikap bertoleransi melahirkan perasaan gembira dan tenang di jiwa. Digit Kedua ialah: 3"
+                    },
+                    {
+                        // Standard Pembelajaran 3: Menghuraikan kepentingan toleransi
+                        type: "mcq",
+                        question: "Mengapakah kita perlu bertoleransi terhadap rakan yang berlainan kaum di sekolah?",
+                        options: [
+                            "A. Untuk menunjukkan kita lebih bijak daripada mereka",
+                            "B. Supaya kita dapat mengelakkan perselisihan faham dan pertengkaran",
+                            "C. Agar kita diberi ganjaran kewangan oleh sekolah",
+                            "D. Kerana dipaksa oleh ibu bapa"
+                        ],
+                        correct: 1, // Index 1 = B
+                        digitAward: "9",
+                        explanation: "Cemerlang! Toleransi mengelakkan perselisihan faham. Digit Ketiga ialah: 9"
+                    }
+                ]
+            },
+            {
+                id: 3,
+                title: "Bilik 3: Bilik Kawalan Pintu Utama",
+                badge: "BILIK TERAKHIR",
+                desc: "Amalkan sikap toleransi demi perpaduan warga sekolah! Selesaikan cabaran akhir ini!",
+                requiredPasscode: "516", // Correct keypad passcode for Room 3
+                hint: "Selesaikan ketiga-tiga soalan mengenai amalan perpaduan untuk membuka pintu keluar utama!",
+                questions: [
+                    {
+                        // Standard Pembelajaran 5: Mengamalkan sikap toleransi untuk mengeratkan perpaduan
+                        type: "mcq",
+                        question: "Sewaktu aktiviti sukaneka, kumpulan anda kalah kerana rakan tersilap langkah. Apakah amalan toleransi terbaik?",
+                        options: [
+                            "A. Menyalahkan rakan tersebut secara terbuka",
+                            "B. Menerima keputusan dengan tenang dan memberi dorongan semangat",
+                            "C. Enggan lagi bermain dalam kumpulan tersebut",
+                            "D. Menangis dan merajuk di tepi padang"
+                        ],
+                        correct: 1, // Index 1 = B
+                        digitAward: "5",
+                        explanation: "Bijak! Memberi dorongan dan sabar mengeratkan perpaduan pasukan. Digit Pertama ialah: 5"
+                    },
+                    {
+                        // Standard Pembelajaran 5: Mengamalkan sikap toleransi
+                        type: "mcq",
+                        question: "Apakah tindakan yang menunjukkan AMALAN TOLERANSI semasa menyambut perayaan pelbagai kaum di sekolah?",
+                        options: [
+                            "A. Mentertawakan pakaian tradisional rakan lain",
+                            "B. Mengganggu rakan yang sedang menjalankan amalan keagamaan/budaya",
+                            "C. Mengucapkan selamat dan menghormati kepelbagaian perayaan",
+                            "D. Menyisihkan rakan yang berbeza agama"
+                        ],
+                        correct: 2, // Index 2 = C
+                        digitAward: "1",
+                        explanation: "Tepat! Menghormati perayaan pelbagai kaum mengeratkan tali perpaduan. Digit Kedua ialah: 1"
+                    },
+                    {
+                        // Standard Pembelajaran 5: Mengamalkan sikap toleransi
+                        type: "mcq",
+                        question: "Bagaimanakah sikap toleransi dapat mewujudkan persekitaran sekolah yang harmoni?",
+                        options: [
+                            "A. Semua murid saling menghormati dan hidup bersatu padu",
+                            "B. Murid sering bergaduh merebut harta benda sekolah",
+                            "C. Guru perlu selalu merotan murid",
+                            "D. Murid tidak perlu berkawan antara satu sama lain"
+                        ],
+                        correct: 0, // Index 0 = A
+                        digitAward: "6",
+                        explanation: "Syabas! Perpaduan terjalin apabila semua warga sekolah bertoleransi. Digit Ketiga ialah: 6"
+                    }
+                ]
+            }
+        ];
+
+        let currentRoomIndex = 0;
+        let currentQuestionIndex = 0;
+        let collectedDigits = [];
+        let keypadInput = "";
+        let timerSeconds = 600; // 10 minutes default
+        let timerInterval = null;
+        let playerName = "Murid Tahun 3";
+
+        function startGame() {
+            const inputVal = document.getElementById('player-name').value.trim();
+            if (inputVal !== "") {
+                playerName = inputVal;
+            }
+
+            AudioFX.playClick();
+
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('game-status-bar').classList.remove('hidden');
+
+            currentRoomIndex = 0;
+            currentQuestionIndex = 0;
+            collectedDigits = [];
+            keypadInput = "";
+
+            startTimer();
+            loadRoomData();
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerSeconds = 600; // 10 minutes
+            updateTimerDisplay();
+
+            timerInterval = setInterval(() => {
+                timerSeconds--;
+                updateTimerDisplay();
+
+                if (timerSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    triggerGameOver();
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const mins = Math.floor(timerSeconds / 60);
+            const secs = timerSeconds % 60;
+            document.getElementById('timer-display').innerText = 
+                `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function loadRoomData() {
+            const room = escapeRooms[currentRoomIndex];
+            
+            // Update Room Headers
+            document.getElementById('room-badge').innerText = room.badge;
+            document.getElementById('room-title').innerText = room.title;
+            document.getElementById('room-desc').innerText = room.desc;
+            document.getElementById('progress-text').innerText = `Bilik ${currentRoomIndex + 1} / 3`;
+            
+            // Update Progress Bar
+            const progressPercent = ((currentRoomIndex + 1) / 3) * 100;
+            document.getElementById('progress-bar-inner').style.width = `${progressPercent}%`;
+
+            // Reset Room Specific States
+            collectedDigits = [];
+            keypadInput = "";
+            updateKeypadDisplay();
+            updateDigitsHintDisplay();
+            hideFeedback();
+
+            currentQuestionIndex = 0;
+            renderCurrentQuestion();
+        }
+
+        function renderCurrentQuestion() {
+            const room = escapeRooms[currentRoomIndex];
+            const q = room.questions[currentQuestionIndex];
+
+            document.getElementById('question-tracker').innerText = `Soalan ${currentQuestionIndex + 1} / ${room.questions.length}`;
+
+            const container = document.getElementById('puzzle-container');
+            container.innerHTML = `
+                <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/80">
+                    <p class="text-sm md:text-base font-semibold text-white leading-relaxed">
+                        ${q.question}
+                    </p>
+                </div>
+                <div class="space-y-2.5 pt-1">
+                    ${q.options.map((opt, idx) => `
+                        <button onclick="checkAnswer(${idx})" class="w-full text-left p-3.5 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-xs md:text-sm text-slate-200 hover:text-white transition-all flex items-center justify-between group">
+                            <span>${opt}</span>
+                            <i class="fa-solid fa-circle-chevron-right text-slate-500 group-hover:text-amber-400 transition-colors"></i>
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function checkAnswer(selectedOptionIndex) {
+            const room = escapeRooms[currentRoomIndex];
+            const q = room.questions[currentQuestionIndex];
+
+            if (selectedOptionIndex === q.correct) {
+                // Correct Answer
+                AudioFX.playCorrect();
+                
+                // Award Digit if not already awarded for this question index
+                if (!collectedDigits[currentQuestionIndex]) {
+                    collectedDigits[currentQuestionIndex] = q.digitAward;
+                }
+
+                showFeedback(true, q.explanation);
+                updateDigitsHintDisplay();
+
+                // Move to next question after short delay or enable progress
+                setTimeout(() => {
+                    if (currentQuestionIndex < room.questions.length - 1) {
+                        currentQuestionIndex++;
+                        hideFeedback();
+                        renderCurrentQuestion();
+                    } else {
+                        // All questions completed in room
+                        showFeedback(true, `Tahniah! Anda telah menjawab semua soalan Bilik ini. KOD LALUAN PINTU IALAH: [ ${collectedDigits.join('')} ]. Masukkan kod pada pad kekunci!`);
+                    }
+                }, 1800);
+
+            } else {
+                // Wrong Answer
+                AudioFX.playWrong();
+                showFeedback(false, "Jawapan kurang tepat. Sila cuba lagi untuk mendapatkan digit kod!");
+            }
+        }
+
+        function showFeedback(isSuccess, message) {
+            const box = document.getElementById('feedback-box');
+            const icon = document.getElementById('feedback-icon');
+            const text = document.getElementById('feedback-text');
+
+            box.classList.remove('hidden', 'bg-emerald-500/20', 'text-emerald-300', 'border-emerald-500/40', 'bg-rose-500/20', 'text-rose-300', 'border-rose-500/40');
+
+            if (isSuccess) {
+                box.classList.add('bg-emerald-500/20', 'text-emerald-300', 'border', 'border-emerald-500/40');
+                icon.className = 'fa-solid fa-circle-check text-emerald-400';
+            } else {
+                box.classList.add('bg-rose-500/20', 'text-rose-300', 'border', 'border-rose-500/40');
+                icon.className = 'fa-solid fa-circle-xmark text-rose-400';
+            }
+
+            text.innerText = message;
+        }
+
+        function hideFeedback() {
+            document.getElementById('feedback-box').classList.add('hidden');
+        }
+
+        function updateDigitsHintDisplay() {
+            const elem = document.getElementById('collected-digit-hint');
+            if (collectedDigits.length === 0) {
+                elem.innerText = "Selesaikan soalan untuk melihat digit!";
+                elem.className = "text-xs text-slate-400 italic";
+            } else {
+                let displayStr = "";
+                for (let i = 0; i < 3; i++) {
+                    displayStr += collectedDigits[i] ? collectedDigits[i] : "?";
+                    if (i < 2) displayStr += " - ";
+                }
+                elem.innerText = `Digit Dikumpul: [ ${displayStr} ]`;
+                elem.className = "text-xs font-mono font-bold text-amber-300";
+            }
+        }
+
+        function pressKey(num) {
+            if (keypadInput.length < 4) {
+                AudioFX.playClick();
+                keypadInput += num;
+                updateKeypadDisplay();
+            }
+        }
+
+        function clearKeypad() {
+            AudioFX.playClick();
+            keypadInput = "";
+            updateKeypadDisplay();
+        }
+
+        function updateKeypadDisplay() {
+            const display = document.getElementById('keypad-display');
+            if (keypadInput === "") {
+                display.innerText = "----";
+                display.className = "font-mono text-3xl font-extrabold tracking-widest text-slate-600 h-9 flex items-center justify-center";
+            } else {
+                display.innerText = keypadInput;
+                display.className = "font-mono text-3xl font-extrabold tracking-widest text-emerald-400 h-9 flex items-center justify-center";
+            }
+        }
+
+        function submitCode() {
+            const currentRoom = escapeRooms[currentRoomIndex];
+
+            if (keypadInput === currentRoom.requiredPasscode) {
+                // Correct Passcode!
+                AudioFX.playUnlock();
+                
+                if (currentRoomIndex < escapeRooms.length - 1) {
+                    // Advance to next room
+                    alert(`KOD BETUL! Pintu ${currentRoom.title} berjaya dibuka!`);
+                    currentRoomIndex++;
+                    loadRoomData();
+                } else {
+                    // Escaped All Rooms! Victory!
+                    triggerVictory();
+                }
+            } else {
+                // Wrong Passcode
+                AudioFX.playWrong();
+                showFeedback(false, "Kod Laluan Salah! Pastikan anda menjawab 3 soalan betul untuk mendapatkan digit jawapan.");
+                clearKeypad();
+            }
+        }
+
+        function showHint() {
+            AudioFX.playClick();
+            const room = escapeRooms[currentRoomIndex];
+            document.getElementById('hint-text-content').innerText = room.hint;
+            document.getElementById('hint-modal').classList.remove('hidden');
+        }
+
+        function closeHint() {
+            AudioFX.playClick();
+            document.getElementById('hint-modal').classList.add('hidden');
+        }
+
+        function triggerVictory() {
+            clearInterval(timerInterval);
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('game-status-bar').classList.add('hidden');
+            document.getElementById('victory-screen').classList.remove('hidden');
+
+            document.getElementById('summary-name').innerText = playerName;
+            
+            const mins = Math.floor(timerSeconds / 60);
+            const secs = timerSeconds % 60;
+            document.getElementById('summary-time').innerText = 
+                `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+            // Trigger Confetti Celebration
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 120,
+                    spread: 80,
+                    origin: { y: 0.6 }
+                });
+            }
+        }
+
+        function triggerGameOver() {
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('game-status-bar').classList.add('hidden');
+            document.getElementById('gameover-screen').classList.remove('hidden');
+        }
+
+        function restartGame() {
+            AudioFX.playClick();
+            document.getElementById('victory-screen').classList.add('hidden');
+            document.getElementById('gameover-screen').classList.add('hidden');
+            document.getElementById('start-screen').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
